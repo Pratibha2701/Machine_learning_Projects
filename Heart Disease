@@ -1,0 +1,103 @@
+# The project aims to Investigate the relation of various health aspects that lead to Heart Disease
+
+#Importing Library
+import pandas as pd
+import numpy as np
+
+
+#Importing data
+data= pd.read_csv("Heart Disease data.csv")
+data.tail(10)
+
+
+#Data Evaluation
+data.describe()
+
+#check for Null value
+data.isnull().sum()
+
+
+
+
+#Normalized Numerical data in dataset
+df=data
+column_data=['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
+df.loc[:, column_data]=(df[column_data]-df[column_data].min())/(df[column_data].max()-df[column_data].min())
+print(df)
+
+
+# Visualing Feature against Target
+import matplotlib.pyplot as plt
+import seaborn as sns
+for column in data.columns[:-1]:
+    plt.figure(figsize=(8, 4))
+    sns.violinplot(x='target', y=column, data=data)
+    plt.title(f'Violin plot of {column} by Target')
+    plt.show()
+
+
+# correlation between feature and Target
+cor_matrix=df.corr()['target'].sort_values(ascending=False)
+print(cor_matrix)
+sns.barplot(x=cor_matrix.index, y=cor_matrix.values)
+plt.title('Correlation with Target')
+plt.xticks(rotation=45)
+plt.show()
+
+# Defining x and y
+x=df.drop('target', axis=1)
+y=df['target']
+
+#one-hot encoding for categorical columns
+from sklearn.preprocessing import OneHotEncoder
+categorical_col=['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'ca', 'thal' ]
+x_encoded=pd.get_dummies(x, columns=categorical_col, drop_first=True)
+
+
+#Training and Test of data
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test= train_test_split(x_encoded, y, test_size=0.2, random_state=50)
+
+
+
+# Decision tree with Randomize search
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score, confusion_matrix
+from sklearn import tree
+param_dist={'max_depth': [3, 5, 7, 10], 'min_samples_split': [5, 10, 20], 'min_samples_leaf': [5, 10, 20], 'criterion': ['gini', 'entropy'], 'max_features': ['sqrt', 'log2', None]}
+dtree1=DecisionTreeClassifier()
+
+random_search= RandomizedSearchCV(estimator=dtree1, param_distributions=param_dist, n_iter=100, cv=5, random_state=42, scoring='accuracy')
+random_search.fit(x_train, y_train)
+print("Best parameters found:", random_search.best_params_)
+
+
+best_dtree = random_search.best_estimator_
+y_pred_best = best_dtree.predict(x_test)
+accuracy_best = accuracy_score(y_test, y_pred_best)
+print(f"Best Decision Tree accuracy: {accuracy_best}")
+
+#Evaluation of model using Confusion matrix
+conf_matrix1=confusion_matrix(y_test, y_pred_best)
+print(f"conf_matrix: \n{conf_matrix1}")
+
+# Evaluation for overfitting
+from sklearn.model_selection import cross_val_score
+score= cross_val_score(best_dtree, x, y, cv=5)
+print(score)
+print(score.mean())
+
+
+
+# Visualization of Random forest model
+import matplotlib.pyplot as plt
+
+plt.figure(figsize=(80,11)) # Reduced figure size for better visibility
+
+# Get feature names from the best_dtree estimator
+feature_names = best_dtree.feature_names_in_
+
+tree.plot_tree(best_dtree, feature_names=feature_names, class_names=['NO Heart Disease', 'Heart Disease'], filled=True, rounded=True, fontsize=10)
+plt.title('Decision Tree for Heart Disease Prediction')
+plt.show()
