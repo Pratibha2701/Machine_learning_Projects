@@ -1,0 +1,119 @@
+# Evaluating the reason for Attrition in a company (Attrition rate of 15%)
+
+#Importing Library
+import numpy as pd
+import pandas as pd
+
+
+# Importing Data
+data= pd.read_csv("Attrition data.csv")
+data.head()
+
+
+
+data.dtypes
+
+
+# Check for Null value
+data.isnull().sum()
+
+#Null value removal
+df_null= data.dropna(axis=0)
+
+# Normalizing Numerical data in dataset
+df=df_null
+column_data=['Age', 'DistanceFromHome', 'Education', 'JobLevel',
+               'MonthlyIncome', 'NumCompaniesWorked', 'PercentSalaryHike',
+               'StockOptionLevel', 'TotalWorkingYears', 'TrainingTimesLastYear',
+               'YearsAtCompany', 'YearsSinceLastPromotion', 'YearsWithCurrManager',
+               'EnvironmentSatisfaction', 'JobSatisfaction', 'WorkLifeBalance',
+               'JobInvolvement', 'PerformanceRating']
+df.loc[:, column_data]=(df[column_data]-df[column_data].min())/(df[column_data].max()-df[column_data].min())
+print(df)
+
+# labeling object to int64
+from sklearn.preprocessing import LabelEncoder
+le=LabelEncoder()
+le.fit(df['Over18'])
+df.loc[:, 'Over18']=le.transform(df['Over18'])
+
+df.describe()
+
+# Defining x and y for further analysis
+x=df.drop('Attrition', axis=1)
+y=df['Attrition']
+
+
+# Statistical analysis(chi-square and p-values  test)
+import scipy.stats as stats
+for col in x:
+ fchi=pd.crosstab(x[col], df['Attrition'])
+ chi2, p_value,  _,_= stats.chi2_contingency(fchi)
+ print(f"Feature: {col}")
+ print(f"Chi-square statistic: {chi2}")
+ print(f"P-value: {p_value}")
+
+
+#One hot encoding for categorical variables 
+from sklearn.preprocessing import OneHotEncoder
+categorical_col= ['BusinessTravel', 'Department', 'EducationField', 'Gender',
+                       'JobRole', 'MaritalStatus']
+x_encoded=pd.get_dummies(x, columns=categorical_col, dtype=int)
+print(x_encoded)
+
+
+#Statistical analysis(Correlation with Attrition)
+import seaborn as sns
+import matplotlib.pyplot as plt
+a=y.map({'Yes':1, 'No':0})
+x_encoded.corr()
+#Visulaization of correlation
+sns.barplot(x=x_encoded.columns, y=x_encoded.corrwith(a))
+plt.xlabel('Features')
+plt.ylabel('Attrition')
+plt.title('Correlation with Attrition')
+plt.xticks(rotation=90)
+plt.show()
+
+#Train_test_split
+from sklearn.model_selection import train_test_split
+x_train, x_test, y_train, y_test= train_test_split(x_encoded, y, test_size=0.2, random_state=50)
+
+#Re-assembling
+from imblearn.over_sampling import SMOTE
+smote= SMOTE(random_state=50)
+x_train_res, y_train_res= smote.fit_resample(x_train, y_train)
+
+
+# Random forest Classification
+from sklearn.model_selection import RandomizedSearchCV
+from sklearn.ensemble import RandomForestClassifier
+parameter={'n_estimators': [100, 200, 300], 'max_depth': [5, 10, 15], 'min_samples_split': [2, 5, 10], 'min_samples_leaf': [1, 2, 5], 'max_features': ['auto', 'sqrt']}
+model = RandomForestClassifier(random_state=50)
+random_search = RandomizedSearchCV(model, param_distributions=parameter, n_iter=10, cv=5, random_state=50, n_jobs=-1)
+random_search.fit(x_train, y_train)
+print("Best parameters found:", random_search.best_params_)
+
+best_model = random_search.best_estimator_
+y_pred_best = best_model.predict(x_test)
+
+#Accuracy and confusion matrix
+from sklearn.metrics import accuracy_score, confusion_matrix
+accuracy_best = accuracy_score(y_test, y_pred_best)
+conf_matrix_best = confusion_matrix(y_test, y_pred_best)
+print(f"Random Forest (Post-Pruned by Hyperparameter Tuning) Accuracy: {accuracy_best}")
+print(f"Confusion Matrix:\n{conf_matrix_best}")
+
+# Evaluation for Overfitting 
+from sklearn.model_selection import cross_val_score
+score= cross_val_score(best_model, x_encoded, y, cv=5)
+print(score)
+print(score.mean())
+
+
+
+from sklearn.tree import plot_tree
+plt.figure(figsize=(80,10))
+plot_tree(best_model.estimators_[0], filled=True, feature_names=x_encoded.columns, class_names=best_model.classes_)
+plt.title('Random Forest Tree')
+plt.show()
